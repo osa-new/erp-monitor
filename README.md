@@ -1,6 +1,6 @@
 # ERP / API Monitoring Dashboard
 
-A self-hosted API health monitoring dashboard built with **Flask**, **SQLite/PostgreSQL**, and a dark industrial-style HTML frontend.
+A self-hosted API health monitoring dashboard built with Flask, SQLite/PostgreSQL, and a dark industrial-style HTML frontend.
 
 ---
 
