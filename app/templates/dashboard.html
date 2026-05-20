@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ERP Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111318;
+    --surface2: #181c23;
+    --border: #1e2530;
+    --border2: #252d3a;
+    --text: #c8d4e0;
+    --text-dim: #5a6a7e;
+    --text-bright: #e8f0f8;
+    --green: #00e676;
+    --green-dim: #00c85320;
+    --red: #ff3d57;
+    --red-dim: #ff3d5720;
+    --yellow: #ffc107;
+    --yellow-dim: #ffc10720;
+    --blue: #2979ff;
+    --blue-dim: #2979ff18;
+    --cyan: #00e5ff;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, #0d1a2a 0%, transparent 60%);
+  }
+
+  /* ── Scanline overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    border: 2px solid var(--cyan);
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    position: relative;
+  }
+
+  .logo-icon::before {
+    content: '';
+    width: 10px; height: 10px;
+    background: var(--cyan);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(0,229,255,0.4); }
+    50% { opacity: 0.7; transform: scale(0.9); box-shadow: 0 0 0 6px rgba(0,229,255,0); }
+  }
+
+  .logo-text { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text-bright); letter-spacing: 0.05em; }
+  .logo-sub { font-family: var(--mono); font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .live-dot {
+    width: 6px; height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: blink 1.4s ease-in-out infinite;
+  }
+
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+  .timestamp { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+
+  .btn {
+    padding: 7px 16px;
+    border-radius: 4px;
+    border: 1px solid;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: all 0.15s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+  .btn-primary:hover { background: var(--blue); color: #fff; }
+  .btn-danger { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .btn-sm { padding: 4px 10px; font-size: 10px; }
+  .btn-green { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  .btn-green:hover { background: var(--green); color: #000; }
+
+  /* ── Layout ── */
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+
+  /* ── Stat cards ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.green::before { background: var(--green); }
+  .stat-card.red::before { background: var(--red); }
+  .stat-card.yellow::before { background: var(--yellow); }
+  .stat-card.blue::before { background: var(--blue); }
+  .stat-card.cyan::before { background: var(--cyan); }
+
+  .stat-label { font-family: var(--mono); font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 8px; }
+  .stat-value { font-family: var(--mono); font-size: 32px; font-weight: 600; line-height: 1; margin-bottom: 4px; }
+  .stat-card.green .stat-value { color: var(--green); }
+  .stat-card.red .stat-value { color: var(--red); }
+  .stat-card.yellow .stat-value { color: var(--yellow); }
+  .stat-card.blue .stat-value { color: var(--blue); }
+  .stat-card.cyan .stat-value { color: var(--cyan); }
+  .stat-sub { font-size: 11px; color: var(--text-dim); }
+
+  /* ── Section headers ── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title::before {
+    content: '';
+    width: 3px; height: 14px;
+    background: var(--cyan);
+    border-radius: 2px;
+  }
+
+  /* ── Endpoint cards ── */
+  .endpoints-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .ep-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    position: relative;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+
+  .ep-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+  .ep-card.status-up { border-left: 3px solid var(--green); }
+  .ep-card.status-down { border-left: 3px solid var(--red); animation: card-alert 2s ease-in-out infinite; }
+  .ep-card.status-unknown { border-left: 3px solid var(--text-dim); }
+
+  @keyframes card-alert {
+    0%, 100% { box-shadow: none; }
+    50% { box-shadow: 0 0 12px rgba(255,61,87,0.15); }
+  }
+
+  .ep-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+  .ep-name { font-weight: 600; font-size: 14px; color: var(--text-bright); margin-bottom: 3px; }
+  .ep-url { font-family: var(--mono); font-size: 11px; color: var(--text-dim); word-break: break-all; }
+
+  .status-badge {
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .badge-up { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+  .badge-down { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+  .badge-unknown { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+
+  .ep-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .ep-metric-label { font-family: var(--mono); font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 3px; }
+  .ep-metric-value { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--text-bright); }
+  .ep-metric-value.good { color: var(--green); }
+  .ep-metric-value.warn { color: var(--yellow); }
+  .ep-metric-value.bad { color: var(--red); }
+
+  .ep-actions { display: flex; gap: 6px; margin-top: 12px; }
+
+  /* ── Uptime bar ── */
+  .uptime-bar-wrap { margin-top: 10px; }
+  .uptime-bar-label { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--text-dim); margin-bottom: 4px; }
+  .uptime-bar-track { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .uptime-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+  .fill-green { background: var(--green); }
+  .fill-yellow { background: var(--yellow); }
+  .fill-red { background: var(--red); }
+
+  /* ── Tables ── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 28px;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: var(--surface2); }
+  th {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td { padding: 9px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background 0.1s; }
+  tbody tr:hover { background: var(--surface2); }
+
+  .td-mono { font-family: var(--mono); font-size: 12px; }
+  .td-dim { color: var(--text-dim); font-size: 12px; }
+  .td-success { color: var(--green); font-family: var(--mono); font-size: 12px; font-weight: 600; }
+  .td-fail { color: var(--red); font-family: var(--mono); font-size: 12px; font-weight: 600; }
+
+  .row-fail td { background: rgba(255,61,87,0.03); }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 2px; margin-bottom: 0; border-bottom: 1px solid var(--border); }
+  .tab-btn {
+    padding: 10px 20px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    transition: all 0.15s;
+    margin-bottom: -1px;
+  }
+
+  .tab-btn.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+
+  .tab-panel { display: none; padding-top: 20px; }
+  .tab-panel.active { display: block; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 28px;
+    width: 480px;
+    max-width: 95vw;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+  }
+
+  .modal-title { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text-bright); margin-bottom: 20px; letter-spacing: 0.05em; }
+
+  .form-row { margin-bottom: 14px; }
+  .form-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); display: block; margin-bottom: 6px; }
+  .form-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    padding: 8px 12px;
+    color: var(--text-bright);
+    font-family: var(--mono);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus { border-color: var(--cyan); }
+  select.form-input option { background: var(--surface); }
+
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    padding: 12px 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-bright);
+    z-index: 999;
+    transform: translateY(20px);
+    opacity: 0;
+    transition: all 0.25s;
+    pointer-events: none;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error { border-color: var(--red); color: var(--red); }
+
+  /* ── Empty state ── */
+  .empty { padding: 40px; text-align: center; color: var(--text-dim); font-family: var(--mono); font-size: 12px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    <div>
+      <div class="logo-text">ERP MONITOR</div>
+      <div class="logo-sub">API Health Dashboard</div>
+    </div>
+  </div>
+  <div class="header-meta">
+    <div class="live-badge"><div class="live-dot"></div>Live</div>
+    <div class="timestamp" id="clock"></div>
+    <button class="btn btn-green btn-sm" onclick="triggerAllChecks()">▶ Run All Checks</button>
+    <button class="btn btn-primary btn-sm" onclick="openModal()">+ Add Endpoint</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Stats row -->
+  <div class="stats-grid">
+    <div class="stat-card green">
+      <div class="stat-label">Services Up</div>
+      <div class="stat-value">{{ stats.up }}</div>
+      <div class="stat-sub">of {{ stats.total }} monitored</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-label">Services Down</div>
+      <div class="stat-value">{{ stats.down }}</div>
+      <div class="stat-sub">{{ stats.unknown }} unknown</div>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-label">Overall Uptime</div>
+      <div class="stat-value">{% if stats.overall_uptime is not none %}{{ stats.overall_uptime }}%{% else %}—{% endif %}</div>
+      <div class="stat-sub">all-time average</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-label">Total Checks</div>
+      <div class="stat-value">{{ stats.total_checks }}</div>
+      <div class="stat-sub">{{ stats.failed_checks }} failures</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-label">Active Endpoints</div>
+      <div class="stat-value">{{ stats.total }}</div>
+      <div class="stat-sub">being monitored</div>
+    </div>
+  </div>
+
+  <!-- Endpoints -->
+  <div class="section-header">
+    <div class="section-title">Service Status</div>
+  </div>
+
+  {% if endpoints %}
+  <div class="endpoints-grid" id="endpoints-grid">
+    {% for ep in endpoints %}
+    <div class="ep-card status-{{ ep.status }}" id="ep-card-{{ ep.id }}">
+      <div class="ep-header">
+        <div>
+          <div class="ep-name">{{ ep.name }}</div>
+          <div class="ep-url">{{ ep.url }}</div>
+        </div>
+        <div class="status-badge badge-{{ ep.status }}">{{ ep.status }}</div>
+      </div>
+
+      {% if ep.uptime_percentage is not none %}
+      <div class="uptime-bar-wrap">
+        <div class="uptime-bar-label">
+          <span>Uptime</span>
+          <span>{{ ep.uptime_percentage }}%</span>
+        </div>
+        <div class="uptime-bar-track">
+          <div class="uptime-bar-fill {% if ep.uptime_percentage >= 95 %}fill-green{% elif ep.uptime_percentage >= 80 %}fill-yellow{% else %}fill-red{% endif %}"
+               style="width: {{ ep.uptime_percentage }}%"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="ep-metrics">
+        <div>
+          <div class="ep-metric-label">Method</div>
+          <div class="ep-metric-value">{{ ep.method }}</div>
+        </div>
+        <div>
+          <div class="ep-metric-label">Expect</div>
+          <div class="ep-metric-value">{{ ep.expected_status }}</div>
+        </div>
+        <div>
+          <div class="ep-metric-label">Avg (ms)</div>
+          <div class="ep-metric-value {% if ep.avg_response_time %}{% if ep.avg_response_time < 500 %}good{% elif ep.avg_response_time < 2000 %}warn{% else %}bad{% endif %}{% endif %}">
+            {% if ep.avg_response_time %}{{ ep.avg_response_time }}{% else %}—{% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if ep.last_check %}
+      <div style="margin-top: 8px; font-family: var(--mono); font-size: 10px; color: var(--text-dim);">
+        Last check: {{ ep.last_check.checked_at.strftime('%H:%M:%S') }}
+        {% if ep.last_check.response_time_ms %}· {{ ep.last_check.response_time_ms }}ms{% endif %}
+      </div>
+      {% endif %}
+
+      <div class="ep-actions">
+        <button class="btn btn-primary btn-sm" onclick="checkNow({{ ep.id }})">▶ Check Now</button>
+        <button class="btn btn-sm" style="border-color:var(--border2);color:var(--text-dim)" onclick="deleteEndpoint({{ ep.id }}, '{{ ep.name }}')">✕ Remove</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="table-wrap"><div class="empty">No endpoints configured. Add one above.</div></div>
+  {% endif %}
+
+  <!-- Logs / Alerts tabs -->
+  <div class="section-header" style="margin-bottom:0">
+    <div class="section-title">Activity</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('logs', this)">Check Logs</button>
+    <button class="tab-btn" onclick="switchTab('failures', this)">Failures Only</button>
+    <button class="tab-btn" onclick="switchTab('alerts', this)">Alert Simulations</button>
+  </div>
+
+  <!-- All logs -->
+  <div class="tab-panel active" id="tab-logs">
+    <div class="table-wrap">
+      {% if recent_logs %}
+      <table>
+        <thead><tr>
+          <th>Time</th><th>Endpoint</th><th>Status</th>
+          <th>HTTP</th><th>Response Time</th><th>Error</th>
+        </tr></thead>
+        <tbody>
+          {% for log in recent_logs %}
+          <tr class="{% if not log.success %}row-fail{% endif %}">
+            <td class="td-mono td-dim">{{ log.checked_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{{ log.endpoint.name if log.endpoint else '—' }}</td>
+            <td class="{% if log.success %}td-success{% else %}td-fail{% endif %}">
+              {{ '✓ OK' if log.success else '✗ FAIL' }}
+            </td>
+            <td class="td-mono">{{ log.status_code or '—' }}</td>
+            <td class="td-mono">{% if log.response_time_ms %}{{ log.response_time_ms }}ms{% else %}—{% endif %}</td>
+            <td class="td-dim" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ log.error_message or '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">No check results yet. Run a check to see logs here.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Failures only -->
+  <div class="tab-panel" id="tab-failures">
+    <div class="table-wrap">
+      {% set failures = recent_logs | selectattr('success', 'equalto', false) | list %}
+      {% if failures %}
+      <table>
+        <thead><tr>
+          <th>Time</th><th>Endpoint</th><th>HTTP</th><th>Error</th>
+        </tr></thead>
+        <tbody>
+          {% for log in failures %}
+          <tr class="row-fail">
+            <td class="td-mono td-dim">{{ log.checked_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{{ log.endpoint.name if log.endpoint else '—' }}</td>
+            <td class="td-mono td-fail">{{ log.status_code or '—' }}</td>
+            <td class="td-dim">{{ log.error_message or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">No failures recorded. All systems nominal.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Alert simulations -->
+  <div class="tab-panel" id="tab-alerts">
+    <div class="table-wrap">
+      {% if recent_alerts %}
+      <table>
+        <thead><tr>
+          <th>Sent At</th><th>Recipient</th><th>Subject</th><th>Type</th>
+        </tr></thead>
+        <tbody>
+          {% for alert in recent_alerts %}
+          <tr>
+            <td class="td-mono td-dim">{{ alert.sent_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td class="td-mono">{{ alert.recipient }}</td>
+            <td>{{ alert.subject }}</td>
+            <td><span class="status-badge badge-unknown">Simulated</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">No alerts triggered yet. Alerts fire when an endpoint with an alert_email goes down.</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Add Endpoint Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-title">// ADD ENDPOINT</div>
+    <div class="form-row">
+      <label class="form-label">Name *</label>
+      <input class="form-input" id="f-name" placeholder="My Service API"/>
+    </div>
+    <div class="form-row">
+      <label class="form-label">URL *</label>
+      <input class="form-input" id="f-url" placeholder="https://api.example.com/health"/>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row" style="margin-bottom:0">
+        <label class="form-label">Method</label>
+        <select class="form-input" id="f-method">
+          <option>GET</option><option>POST</option><option>HEAD</option>
+        </select>
+      </div>
+      <div class="form-row" style="margin-bottom:0">
+        <label class="form-label">Expected Status</label>
+        <input class="form-input" id="f-status" type="number" value="200"/>
+      </div>
+    </div>
+    <div class="form-row" style="margin-top:14px">
+      <label class="form-label">Timeout (seconds)</label>
+      <input class="form-input" id="f-timeout" type="number" value="10"/>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Alert Email (optional — simulated)</label>
+      <input class="form-input" id="f-email" placeholder="ops@yourcompany.com" type="email"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="border-color:var(--border2);color:var(--text-dim)" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="addEndpoint()">Add Endpoint</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API_KEY = "{{ config.get('API_KEY', 'dev-api-key-change-me') or 'dev-api-key-change-me' }}";
+const HEADERS = { "Content-Type": "application/json", "X-API-Key": API_KEY };
+
+// Clock
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Toast
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// Tabs
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// Modal
+function openModal() { document.getElementById('modal').classList.add('open'); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+async function addEndpoint() {
+  const name = document.getElementById('f-name').value.trim();
+  const url = document.getElementById('f-url').value.trim();
+  if (!name || !url) { toast('Name and URL are required', 'error'); return; }
+
+  const body = {
+    name, url,
+    method: document.getElementById('f-method').value,
+    expected_status: parseInt(document.getElementById('f-status').value),
+    timeout: parseInt(document.getElementById('f-timeout').value),
+    alert_email: document.getElementById('f-email').value.trim() || null,
+  };
+
+  try {
+    const res = await fetch('/api/endpoints', { method: 'POST', headers: HEADERS, body: JSON.stringify(body) });
+    if (res.ok) {
+      toast('Endpoint added!', 'success');
+      closeModal();
+      setTimeout(() => location.reload(), 800);
+    } else {
+      const err = await res.json();
+      toast(err.error || 'Failed to add endpoint', 'error');
+    }
+  } catch (e) { toast('Network error', 'error'); }
+}
+
+async function checkNow(id) {
+  toast('Checking endpoint...');
+  try {
+    const res = await fetch(`/api/endpoints/${id}/check`, { method: 'POST', headers: HEADERS });
+    const data = await res.json();
+    if (res.ok) {
+      toast(data.success ? `✓ UP — ${data.response_time_ms}ms` : `✗ DOWN — ${data.error_message}`, data.success ? 'success' : 'error');
+      setTimeout(() => location.reload(), 1200);
+    }
+  } catch (e) { toast('Check failed', 'error'); }
+}
+
+async function deleteEndpoint(id, name) {
+  if (!confirm(`Remove "${name}" from monitoring?`)) return;
+  try {
+    const res = await fetch(`/api/endpoints/${id}`, { method: 'DELETE', headers: HEADERS });
+    if (res.ok) { toast('Endpoint removed', 'success'); setTimeout(() => location.reload(), 600); }
+    else toast('Failed to remove', 'error');
+  } catch (e) { toast('Network error', 'error'); }
+}
+
+async function triggerAllChecks() {
+  toast('Running all checks...');
+  try {
+    await fetch('/api/checks/run-all', { method: 'POST', headers: HEADERS });
+    toast('All checks triggered!', 'success');
+    setTimeout(() => location.reload(), 2500);
+  } catch (e) { toast('Failed', 'error'); }
+}
+
+// Auto-refresh every 60s
+setTimeout(() => location.reload(), 60000);
+</script>
+
+</body>
+</html>

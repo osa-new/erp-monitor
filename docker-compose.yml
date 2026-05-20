@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  # ── Main app ──────────────────────────────────────────
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      # Override DB URL to use the postgres service below (optional)
+      # DATABASE_URL: postgresql://monitor:monitor@db:5432/erp_monitor
+      FLASK_DEBUG: "false"
+    volumes:
+      # Persist SQLite DB on host when using sqlite
+      - sqlite_data:/app/instance
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── PostgreSQL (optional — comment out if using SQLite) ──
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: monitor
+      POSTGRES_PASSWORD: monitor
+      POSTGRES_DB: erp_monitor
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U monitor -d erp_monitor"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:
+  pg_data:
